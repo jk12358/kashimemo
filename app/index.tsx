@@ -1,55 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getDatabase } from '@/db';
-import { Project } from '@/types/database';
+import { useProjectStore } from '@/stores/projectStore';
 
 /**
  * プロジェクト一覧画面
  */
 export default function ProjectListScreen() {
   const router = useRouter();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { projects, loading, loadProjects, createProject, deleteProject } = useProjectStore();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadProjects();
   }, []);
-
-  const loadProjects = async () => {
-    try {
-      const db = await getDatabase();
-      const result = await db.getAllAsync<Project>(
-        'SELECT * FROM projects ORDER BY updated_at DESC'
-      );
-      setProjects(result);
-    } catch (error) {
-      console.error('Failed to load projects:', error);
-      Alert.alert('エラー', 'プロジェクトの読み込みに失敗しました');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCreateProject = async () => {
-    try {
-      const db = await getDatabase();
-      const now = Date.now();
-
-      const result = await db.runAsync(
-        `INSERT INTO projects (title, bpm, key_root, key_mode, time_signature, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        ['新しい曲', 120, 'C', 'major', '4/4', now, now, 1]
-      );
-
-      await loadProjects();
-      Alert.alert('成功', 'プロジェクトを作成しました');
-    } catch (error) {
-      console.error('Failed to create project:', error);
-      Alert.alert('エラー', 'プロジェクトの作成に失敗しました');
-    }
-  };
 
   const handleDeleteProject = (id: number, title: string) => {
     Alert.alert(
@@ -60,16 +24,7 @@ export default function ProjectListScreen() {
         {
           text: '削除',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              const db = await getDatabase();
-              await db.runAsync('DELETE FROM projects WHERE id = ?', [id]);
-              await loadProjects();
-            } catch (error) {
-              console.error('Failed to delete project:', error);
-              Alert.alert('エラー', 'プロジェクトの削除に失敗しました');
-            }
-          },
+          onPress: () => deleteProject(id),
         },
       ]
     );
@@ -79,7 +34,7 @@ export default function ProjectListScreen() {
     p.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (isLoading) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>読み込み中...</Text>
@@ -124,7 +79,7 @@ export default function ProjectListScreen() {
         }
       />
 
-      <TouchableOpacity style={styles.fab} onPress={handleCreateProject}>
+      <TouchableOpacity style={styles.fab} onPress={createProject}>
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
     </View>

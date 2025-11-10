@@ -1,36 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { getDatabase } from '@/db';
-import { Project } from '@/types/database';
+import { useEditorStore } from '@/stores/editorStore';
+import { KeyDisplay } from '@/components/editor/KeyDisplay';
+import { SectionList } from '@/components/editor/SectionList';
+import { LineList } from '@/components/editor/LineList';
+
+type TabType = 'lyrics' | 'chords' | 'description';
 
 /**
- * エディタ画面（プレースホルダー）
- * TODO: タブ切替、セクション管理、ドラフト切替などを実装
+ * エディタ画面
+ * タブ切り替え（歌詞/コード進行/説明文）
  */
 export default function EditorScreen() {
   const { projectId } = useLocalSearchParams<{ projectId: string }>();
-  const [project, setProject] = useState<Project | null>(null);
+  const { currentProjectId, key, loadProject } = useEditorStore();
+  const [activeTab, setActiveTab] = useState<TabType>('lyrics');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadProject();
+    const load = async () => {
+      if (projectId) {
+        await loadProject(parseInt(projectId));
+        setIsLoading(false);
+      }
+    };
+    load();
   }, [projectId]);
-
-  const loadProject = async () => {
-    try {
-      const db = await getDatabase();
-      const result = await db.getFirstAsync<Project>(
-        'SELECT * FROM projects WHERE id = ?',
-        [parseInt(projectId)]
-      );
-      setProject(result ?? null);
-    } catch (error) {
-      console.error('Failed to load project:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -40,7 +36,7 @@ export default function EditorScreen() {
     );
   }
 
-  if (!project) {
+  if (!currentProjectId) {
     return (
       <View style={styles.loadingContainer}>
         <Text>プロジェクトが見つかりません</Text>
@@ -49,42 +45,94 @@ export default function EditorScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{project.title}</Text>
-        <Text style={styles.keyInfo}>
-          {project.key_root} {project.key_mode} | {project.bpm} BPM
-        </Text>
+    <View style={styles.container}>
+      {/* タブバー */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'lyrics' && styles.activeTab]}
+          onPress={() => setActiveTab('lyrics')}
+        >
+          <Text style={[styles.tabText, activeTab === 'lyrics' && styles.activeTabText]}>
+            歌詞
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'chords' && styles.activeTab]}
+          onPress={() => setActiveTab('chords')}
+        >
+          <Text style={[styles.tabText, activeTab === 'chords' && styles.activeTabText]}>
+            コード進行
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'description' && styles.activeTab]}
+          onPress={() => setActiveTab('description')}
+        >
+          <Text style={[styles.tabText, activeTab === 'description' && styles.activeTabText]}>
+            説明文
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        <Text style={styles.placeholder}>
-          エディタ画面（実装予定）
-        </Text>
-        <Text style={styles.description}>
-          • タブ切替（歌詞/コード/概要欄）{'\n'}
-          • セクション管理{'\n'}
-          • A/B/C ドラフト切替{'\n'}
-          • グローバル進行表示{'\n'}
-          • ピアノ鍵盤ハイライト
-        </Text>
-      </View>
-    </ScrollView>
+      {/* コンテンツエリア */}
+      <ScrollView style={styles.content}>
+        {activeTab === 'lyrics' && (
+          <View style={styles.tabContent}>
+            <KeyDisplay root={key.root} mode={key.mode} />
+            <SectionList />
+            <LineList />
+          </View>
+        )}
+        {activeTab === 'chords' && (
+          <View style={styles.tabContent}>
+            <Text style={styles.placeholderText}>コード進行（未実装）</Text>
+          </View>
+        )}
+        {activeTab === 'description' && (
+          <View style={styles.tabContent}>
+            <Text style={styles.placeholderText}>説明文ビルダー（未実装）</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F9F9' },
+  container: { flex: 1, backgroundColor: '#F5F5F5' },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: {
+  tabBar: {
+    flexDirection: 'row',
     backgroundColor: '#FFF',
-    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
-  title: { fontSize: 24, fontWeight: '700', color: '#333', marginBottom: 8 },
-  keyInfo: { fontSize: 16, color: '#666' },
-  content: { padding: 16 },
-  placeholder: { fontSize: 20, fontWeight: '600', color: '#333', marginBottom: 16 },
-  description: { fontSize: 14, color: '#666', lineHeight: 24 },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#4CAF50',
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#999',
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#4CAF50',
+    fontWeight: '700',
+  },
+  content: { flex: 1 },
+  tabContent: { padding: 16 },
+  placeholderText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 32,
+  },
 });
